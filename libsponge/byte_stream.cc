@@ -12,42 +12,94 @@ void DUMMY_CODE(Targs &&... /* unused */) {}
 
 using namespace std;
 
-ByteStream::ByteStream(const size_t capacity) { DUMMY_CODE(capacity); }
+ByteStream::ByteStream(const size_t capacity1) : capacity(capacity1) { DUMMY_CODE(capacity); }
 
 size_t ByteStream::write(const string &data) {
     DUMMY_CODE(data);
-    return {};
+    if (input_ended() == true) {
+        return 0;
+    }
+    if (buffer_size() == capacity) {
+        return 0;
+    }
+    int write_size = 0;
+
+    if (data.size() + buffer_size() <= capacity) {
+        write_size = data.size();
+        buffer += data;
+    } else {
+        write_size = capacity - buffer.size();
+        buffer += data.substr(0, write_size);
+    }
+    
+    total_bytes_written += write_size;
+    return write_size;
 }
 
 //! \param[in] len bytes will be copied from the output side of the buffer
 string ByteStream::peek_output(const size_t len) const {
     DUMMY_CODE(len);
-    return {};
+    int peek_len = 0;
+    if (len >= buffer_size()) {
+        peek_len = buffer_size();
+    } else {
+        peek_len = 0;
+    }
+    return buffer.substr(0, peek_len);
 }
 
-//! \param[in] len bytes will be removed from the output side of the buffer
-void ByteStream::pop_output(const size_t len) { DUMMY_CODE(len); }
+//! \param[in] len bytes will be removed from the output side of the buffer the total_read_size also would be added
+void ByteStream::pop_output(const size_t len) {
+    DUMMY_CODE(len);
+    if (len >= buffer_size()) {
+        total_bytes_read +=  buffer_size();
+        buffer = "";
+    } else {
+        total_bytes_read += len;
+        buffer = buffer.substr(len);
+    }
+    if (input_ended() == true && buffer_empty()) {
+        is_eof = true;
+    }
+}
 
 //! Read (i.e., copy and then pop) the next "len" bytes of the stream
 //! \param[in] len bytes will be popped and returned
 //! \returns a string
 std::string ByteStream::read(const size_t len) {
     DUMMY_CODE(len);
-    return {};
+    if (is_eof) {
+        return "";
+    }
+    int read_size = 0;
+    if (len >= buffer_size()) {
+        read_size = buffer_size();
+    } else {
+        read_size = len;
+    }
+    string res = buffer.substr(0, read_size);
+    pop_output(read_size);
+    return res;
 }
 
-void ByteStream::end_input() {}
+// should examine buffer is empty and mark eof
+void ByteStream::end_input() { 
+    is_input_ended = true;
+    if (buffer_size() == 0) {
+        is_eof = true;
+    }
+}
 
-bool ByteStream::input_ended() const { return {}; }
+bool ByteStream::input_ended() const { return is_input_ended; }
 
-size_t ByteStream::buffer_size() const { return {}; }
+size_t ByteStream::buffer_size() const { return buffer.size(); }
 
-bool ByteStream::buffer_empty() const { return {}; }
+bool ByteStream::buffer_empty() const { return buffer_size() == 0; }
 
-bool ByteStream::eof() const { return false; }
+bool ByteStream::eof() const { return is_eof; }
 
-size_t ByteStream::bytes_written() const { return {}; }
+size_t ByteStream::bytes_written() const { return total_bytes_written; }
 
-size_t ByteStream::bytes_read() const { return {}; }
+size_t ByteStream::bytes_read() const { return total_bytes_read; }
 
-size_t ByteStream::remaining_capacity() const { return {}; }
+size_t ByteStream::remaining_capacity() const { return capacity - buffer_size(); }

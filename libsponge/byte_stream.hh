@@ -16,6 +16,12 @@ class ByteStream {
     // all, but if any of your tests are taking longer than a second,
     // that's a sign that you probably want to keep exploring
     // different approaches.
+    std::string buffer{};
+    size_t total_bytes_written = 0;
+    size_t total_bytes_read = 0;
+    size_t capacity = 0;
+    bool is_eof = false; // true when input_ended and buffer is empty
+    bool is_input_ended = false;
 
     bool _error{};  //!< Flag indicating that the stream suffered an error.
 

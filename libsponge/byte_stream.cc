@@ -16,12 +16,10 @@ ByteStream::ByteStream(const size_t capacity1) : capacity(capacity1) { DUMMY_COD
 
 size_t ByteStream::write(const string &data) {
     DUMMY_CODE(data);
-    if (input_ended() == true) {
+    if (input_ended() == true || remaining_capacity() == 0) {
         return 0;
     }
-    if (buffer_size() == capacity) {
-        return 0;
-    }
+
     int write_size = 0;
 
     if (data.size() + buffer_size() <= capacity) {
@@ -88,6 +86,15 @@ void ByteStream::end_input() {
     if (buffer_size() == 0) {
         is_eof = true;
     }
+}
+
+size_t ByteStream::write_single(const char& data) {
+    if (input_ended() == true || remaining_capacity() == 0) {
+        return 0;
+    }
+    total_bytes_written++;
+    buffer.push_back(data);
+    return 1;
 }
 
 bool ByteStream::input_ended() const { return is_input_ended; }

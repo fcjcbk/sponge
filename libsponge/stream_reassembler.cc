@@ -42,8 +42,8 @@ void StreamReassembler::push_substring(const string &data, const size_t index, c
             if (write_size == 1) {
                 current_index++;
                 book.emplace(n_index);
-                if (_eof && current_index == end_index) {
-                    _output.end_input();
+                if (check_is_end()) {
+                    return;
                 }
                 continue;
             }
@@ -68,8 +68,7 @@ size_t StreamReassembler::unassembled_bytes() const {  return qu.size(); }
 bool StreamReassembler::empty() const { return qu.empty(); }
 
 void StreamReassembler::write_bytestream() {
-    if (_eof && current_index == end_index) {
-        _output.end_input();
+    if (check_is_end()) {
         return;
     }
     while (!qu.empty() && qu.top().first == current_index) {
@@ -79,14 +78,19 @@ void StreamReassembler::write_bytestream() {
             return;
         }
         qu.pop();
+        book.erase(current_index);
         current_index++;
-        if (_eof && current_index == end_index) {
-            _output.end_input();
+        if (check_is_end()) {
+            break;
         }
         
     }
 }
 
-// void StreamReassembler::write_single(const char& data) {
-
-// }
+bool StreamReassembler::check_is_end() {
+    if (_eof && current_index == end_index) {
+        _output.end_input();
+        return true;
+    }
+    return false;
+}

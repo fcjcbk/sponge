@@ -36,7 +36,7 @@ void StreamReassembler::push_substring(const string &data, const size_t index, c
         if (n_index < current_index || book.count(n_index)) {
             continue;
         }
-        size_t remain_capacity = _capacity - unassembled_bytes() - _output.buffer_size();
+        size_t remain_capacity = remaining_capacity();
         if (n_index == current_index) {
             size_t write_size = _output.write_single(data[i]);
             if (write_size == 1) {

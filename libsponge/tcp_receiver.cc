@@ -15,10 +15,12 @@ using namespace std;
 void TCPReceiver::segment_received(const TCPSegment &seg) {
     DUMMY_CODE(seg);
     // 此处需要判断是否为fin，同时为fin要进行下一步操作
+    bool flag = false;
     if (seg.header().syn == true) {
         if (is_start == false) {
             is_start = true;
             isn = seg.header().seqno;
+            flag = true;
         }
     }
     if (is_start == false) {
@@ -38,11 +40,16 @@ void TCPReceiver::segment_received(const TCPSegment &seg) {
         }
     }
     if (absolute_index == 0) {
-        write_to_assembler(seg.payload().copy(), absolute_index);
+        if (flag) {
+            write_to_assembler(seg.payload().copy(), absolute_index);
+        } else {
+            write_to_assembler("", absolute_index);
+        }
+        return;
     } else {            
         write_to_assembler(seg.payload().copy(), absolute_index - 1);
     }
-    // if (seg.header().syn == true) {}
+        // write_to_assembler(seg.payload().copy(), absolute_index - 1);
     
 
 
@@ -60,13 +67,18 @@ optional<WrappingInt32> TCPReceiver::ackno() const {
     return wrap(absolute_index, isn);
 }
 
-size_t TCPReceiver::window_size() const { return _reassembler.remaining_capacity(); }
+size_t TCPReceiver::window_size() const { return _capacity - _reassembler.stream_out().buffer_size(); }
 
 void TCPReceiver::write_to_assembler(const std::string& data, uint64_t index) {
-    if (is_end && index + data.size() < end_index) {
-        _reassembler.push_substring(data, index, is_end);
+    if (is_end) {
+        if (index + data.size() < end_index) {
+                _reassembler.push_substring(data, index, is_end);
+        } else {
+            size_t write_size = end_index - index;
+            _reassembler.push_substring(data.substr(0, write_size), index, is_end);
+        }
     } else {
-        size_t write_size = end_index - index;
-        _reassembler.push_substring(data.substr(0, write_size), index, is_end);
+        _reassembler.push_substring(data, index, is_end);
     }
+    
 }

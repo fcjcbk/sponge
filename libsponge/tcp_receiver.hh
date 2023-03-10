@@ -21,13 +21,13 @@ class TCPReceiver {
     //! The maximum number of bytes we'll store.
     size_t _capacity;
 
-    bool is_start = false;
+    bool is_start = false; // 是否收到syn
 
-    bool is_end = false;
+    bool is_end = false; // 是否收到fin
 
-    WrappingInt32 isn;
+    WrappingInt32 isn; // 初始seqno
 
-    uint64_t end_index = 0; // 第一个不能收到的就是比最后一个index多1 stream_index 不包括fin 和 syn
+    uint64_t end_index = 0; // stream index
 
     void write_to_assembler(const std::string& data, uint64_t index);
 

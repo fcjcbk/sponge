@@ -6,7 +6,9 @@
 #include "wrapping_integers.hh"
 
 #include <cstdint>
+#include <ios>
 #include <random>
+#include <iostream>
 
 // Dummy implementation of a TCP sender
 
@@ -35,7 +37,7 @@ void TCPSender::fill_window() {
         size_t write_data_size = 1;
         TCPSegment segment;
         segment.parse(Buffer(_stream.read(write_data_size)));
-        if (_stream.buffer_empty() && _stream.eof()) {
+        if (_stream.eof()) {
             segment.header().fin = true;
         }
         _segments_out.push(segment);
@@ -49,29 +51,40 @@ void TCPSender::fill_window() {
         return;
     }
     // 没有对syn和fin进行处理
-    while (_next_seqno < _right_edge) {
+    if (_stream.buffer_empty() && (_next_seqno == 0 || _stream.eof())) {
+        TCPSegment _segment;
+        _segment.header().seqno = wrap(_next_seqno, _isn);
+        if (_next_seqno == 0) {
+            _segment.header().syn = true;
+        }
+        if (_stream.eof()) {
+            _segment.header().fin = true;
+        }
+        _segments_out.push(_segment);
+        _outstanding.push(_segment);
+        // tcp的接收窗口会考虑syn与fin标志
+        _next_seqno += _segment.length_in_sequence_space();
+        _flying_bytes += _segment.length_in_sequence_space();
+        if (!_is_time_counter_on) {
+            _is_time_counter_on = true;
+            _time_count = 0;
+        }
+    }
+    while (_next_seqno < _right_edge && !_stream.buffer_empty()) {
         // find the largest size can be send
         
         TCPSegment _segment;
         _segment.header().seqno = wrap(_next_seqno, _isn);
-        if (_stream.buffer_empty()) {
-            if (_next_seqno == 0) {
-                _segment.header().syn = true;
-            }
-            if (_stream.eof()) {
-                _segment.header().fin = true;
-            }
-        } else {
-            size_t write_data_size = std::min(TCPConfig::MAX_PAYLOAD_SIZE, std::min(_right_edge - _next_seqno, _stream.buffer_size()));
-            _segment.parse(Buffer(_stream.read(write_data_size)));
-
-            if (_next_seqno == 0) {
-                _segment.header().syn = true;
-            }
-            if (_stream.buffer_empty() && _stream.eof()) {
-                _segment.header().fin = true;
-            }
+        
+        size_t write_data_size = std::min(TCPConfig::MAX_PAYLOAD_SIZE, std::min(_right_edge - _next_seqno, _stream.buffer_size()));
+        _segment.payload() = Buffer(_stream.read(write_data_size));
+        if (_next_seqno == 0) {
+            _segment.header().syn = true;
         }
+        if (_stream.eof()) {
+            _segment.header().fin = true;
+        }
+        
         _segments_out.push(_segment);
         _outstanding.push(_segment);
         // tcp的接收窗口会考虑syn与fin标志
@@ -94,7 +107,7 @@ void TCPSender::ack_received(const WrappingInt32 ackno, const uint16_t window_si
     _right_edge = std::max(_right_edge, abs_ackno + window_size);
     // 这里大于还是大于等于要注意
     while (!_outstanding.empty() 
-            && abs_ackno > _outstanding.front().length_in_sequence_space() + unwrap(_outstanding.front().header().seqno, _isn, abs_ackno)) {
+            && abs_ackno >= _outstanding.front().length_in_sequence_space() + unwrap(_outstanding.front().header().seqno, _isn, abs_ackno)) {
         
         _flying_bytes -= _outstanding.front().length_in_sequence_space();
         _outstanding.pop();

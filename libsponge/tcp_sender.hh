@@ -43,6 +43,12 @@ class TCPSender {
 
     uint64_t _flying_bytes = 0;
 
+    unsigned int _retransmission_timeout;
+
+    bool _is_time_counter_on = false;
+
+    size_t _retransmission_consecutive_times = 0;
+
   public:
     //! Initialize a TCPSender
     TCPSender(const size_t capacity = TCPConfig::DEFAULT_CAPACITY,

@@ -15,7 +15,6 @@ using namespace std;
 ByteStream::ByteStream(const size_t capacity1) : capacity(capacity1) { DUMMY_CODE(capacity); }
 
 size_t ByteStream::write(const string &data) {
-    DUMMY_CODE(data);
     if (input_ended() == true || remaining_capacity() == 0) {
         return 0;
     }
@@ -36,7 +35,6 @@ size_t ByteStream::write(const string &data) {
 
 //! \param[in] len bytes will be copied from the output side of the buffer
 string ByteStream::peek_output(const size_t len) const {
-    DUMMY_CODE(len);
     int peek_len = 0;
     if (len >= buffer_size()) {
         peek_len = buffer_size();
@@ -48,7 +46,6 @@ string ByteStream::peek_output(const size_t len) const {
 
 //! \param[in] len bytes will be removed from the output side of the buffer the total_read_size also would be added
 void ByteStream::pop_output(const size_t len) {
-    DUMMY_CODE(len);
     if (len >= buffer_size()) {
         total_bytes_read +=  buffer_size();
         buffer = "";
@@ -65,7 +62,6 @@ void ByteStream::pop_output(const size_t len) {
 //! \param[in] len bytes will be popped and returned
 //! \returns a string
 std::string ByteStream::read(const size_t len) {
-    DUMMY_CODE(len);
     if (is_eof) {
         return "";
     }

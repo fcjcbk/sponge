@@ -49,6 +49,8 @@ class TCPSender {
 
     size_t _retransmission_consecutive_times = 0;
 
+    bool _is_fin = false;
+
   public:
     //! Initialize a TCPSender
     TCPSender(const size_t capacity = TCPConfig::DEFAULT_CAPACITY,

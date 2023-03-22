@@ -8,7 +8,6 @@
 #include <cstdint>
 #include <ios>
 #include <random>
-#include <iostream>
 
 // Dummy implementation of a TCP sender
 
@@ -35,37 +34,7 @@ void TCPSender::fill_window() {
     if (_is_fin) {
         return;
     }
-    //todo: 发送报文段时要检查定时器是否启动
-    if (_window_size == 0) {
-        bool has_thing = false;
-        size_t write_data_size = 1;
-        TCPSegment _segment;
-        if (_stream.eof() && _is_fin == false) {
-            _segment.header().fin = true;
-            _is_fin = true;
-            has_thing = true;
-        }
-        // 没有fin标记时，才能往里面塞东西
-        if (!_segment.header().fin && !_stream.buffer_empty()) {
-            _segment.payload() = Buffer(_stream.read(write_data_size));
-            has_thing = true;
-
-        }
-        if (has_thing) {
-            _segment.header().seqno = wrap(next_seqno_absolute(), _isn);
-            _segments_out.push(_segment);
-            _outstanding.push(_segment);
-            _next_seqno += _segment.length_in_sequence_space();
-            _flying_bytes += _segment.length_in_sequence_space();
-            if (!_is_time_counter_on) {
-                _is_time_counter_on = true;
-                _time_count = 0;
-            }
-        }
-        
-        return;
-    }
-    // 没有对syn和fin进行处理
+    // 注意：syn和fin各占一个字节
     if (_stream.buffer_empty() && (next_seqno_absolute() == 0 || _stream.eof()) && next_seqno_absolute() < _right_edge) {
         TCPSegment _segment;
         _segment.header().seqno = wrap(next_seqno_absolute(), _isn);
@@ -109,7 +78,7 @@ void TCPSender::fill_window() {
         }
         _segments_out.push(_segment);
         _outstanding.push(_segment);
-        // tcp的接收窗口会考虑syn与fin标志
+        // tcp的接收窗口要考虑syn与fin标志大小
         _next_seqno += _segment.length_in_sequence_space();
         _flying_bytes += _segment.length_in_sequence_space();
         if (!_is_time_counter_on) {
@@ -124,15 +93,17 @@ void TCPSender::fill_window() {
 //! \param window_size The remote receiver's advertised window size
 void TCPSender::ack_received(const WrappingInt32 ackno, const uint16_t window_size) {
     _window_size = window_size;
-    // todo: 如果是确认重传必须要将rto值恢复正常
+    // 有新的数据到达 必须要将rto值恢复正常
     uint64_t abs_ackno = unwrap(ackno, _isn, next_seqno_absolute());
     _right_edge = abs_ackno + window_size;
-    // 这里大于还是大于等于要注意
+    if (window_size == 0) {
+        _right_edge++;
+    }
+    // 这里是大于等于，同时如果ackno大于next_seqno要拒绝
     while (!_outstanding.empty() 
             && abs_ackno >= _outstanding.front().length_in_sequence_space() + unwrap(_outstanding.front().header().seqno, _isn, abs_ackno)
             && abs_ackno <= next_seqno_absolute()) {
-        // std::cout << _outstanding.size() << std::endl;
-        // std::cout << "pop" << std::endl;
+        
         _flying_bytes -= _outstanding.front().length_in_sequence_space();
         _outstanding.pop();
 
@@ -145,7 +116,7 @@ void TCPSender::ack_received(const WrappingInt32 ackno, const uint16_t window_si
     }
     fill_window();
     if (_flying_bytes == 0) {
-        // todo: 将定时器停止
+        // 没有数据未确认停止定时器
         _is_time_counter_on = false;
         _time_count = 0;
     }
@@ -159,7 +130,9 @@ void TCPSender::tick(const size_t ms_since_last_tick) {
     }
     _time_count += ms_since_last_tick;
     if (_time_count >= _retransmission_timeout) {
+        // 重传
         _segments_out.push(_outstanding.front());
+        // 按照窗口大于0处理
         if (_window_size > 0) {
             _retransmission_consecutive_times++;
             _retransmission_timeout *= 2;

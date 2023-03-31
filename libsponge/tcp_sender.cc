@@ -35,15 +35,19 @@ void TCPSender::fill_window() {
         return;
     }
     // 注意：syn和fin各占一个字节
-    if (_stream.buffer_empty() && (next_seqno_absolute() == 0 || _stream.eof()) && next_seqno_absolute() < _right_edge) {
+    if (_stream.buffer_empty() && ((next_seqno_absolute() == 0 && _is_syn == false) || _stream.eof()) && next_seqno_absolute() < _right_edge) {
         TCPSegment _segment;
         _segment.header().seqno = wrap(next_seqno_absolute(), _isn);
-        if (next_seqno_absolute() == 0) {
+        if (next_seqno_absolute() == 0 && _is_syn == false) {
             _segment.header().syn = true;
+            _is_syn = true;
         }
         if (_stream.eof() && _is_fin == false) {
             _segment.header().fin = true;
             _is_fin = true;
+        }
+        if (_segment.length_in_sequence_space() == 0) {
+            return;
         }
         _segments_out.push(_segment);
         _outstanding.push(_segment);
@@ -62,8 +66,9 @@ void TCPSender::fill_window() {
         _segment.header().seqno = wrap(next_seqno_absolute(), _isn);
         
         size_t write_data_size = std::min(TCPConfig::MAX_PAYLOAD_SIZE, std::min(_right_edge - next_seqno_absolute(), _stream.buffer_size()));
-        if (next_seqno_absolute() == 0) {
+        if (next_seqno_absolute() == 0 && _is_syn == false) {
             _segment.header().syn = true;
+            _is_syn = true;
             write_data_size--;
         }
         if (write_data_size > 0) {

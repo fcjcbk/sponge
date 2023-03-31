@@ -51,6 +51,8 @@ class TCPSender {
 
     bool _is_fin = false;
 
+    bool _is_syn = false;
+
   public:
     //! Initialize a TCPSender
     TCPSender(const size_t capacity = TCPConfig::DEFAULT_CAPACITY,

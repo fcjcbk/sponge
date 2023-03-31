@@ -23,6 +23,7 @@ size_t TCPConnection::unassembled_bytes() const { return _receiver.unassembled_b
 size_t TCPConnection::time_since_last_segment_received() const { return _time - _last_segment_received; }
 
 void TCPConnection::segment_received(const TCPSegment &seg) { 
+    std::cout << "received" << std::endl;
     bool f = false;
     // 更新最后接收报文时间
     _last_segment_received = _time;
@@ -44,10 +45,12 @@ void TCPConnection::segment_received(const TCPSegment &seg) {
     }
     // todo: 如果占用sequence number发送一个segment回应
     if (seg.length_in_sequence_space() != 0) {
+        std::cout << "true" << std::endl;
         f = true;
     }
     if (f) {
         if (_sender.segments_out().empty()) {
+            std::cout << "generate a empty segmet" <<std::endl;
             _sender.send_empty_segment();
         }
         send_segment();
@@ -72,7 +75,11 @@ void TCPConnection::tick(const size_t ms_since_last_tick) {
     }
 }
 
-void TCPConnection::end_input_stream() { _sender.stream_in().end_input(); }
+void TCPConnection::end_input_stream() {
+    // 发送fin 
+    _sender.stream_in().end_input();
+    send_segment();
+}
 
 void TCPConnection::connect() { 
     send_segment();
@@ -100,8 +107,12 @@ void TCPConnection::send_RST_segment() {
 }
 
 void TCPConnection::send_segment() {
+    // todo: 在收到一个占用seqno的报文应该发送ack即使当前发送方buffer为空
     _sender.fill_window();
-    auto _out = _sender.segments_out();
+    auto& _out = _sender.segments_out();
+    if (_out.empty()) {
+        std::cout << "empty!!!" << std::endl;
+    }
     while (!_out.empty()) {
         TCPSegment seg = _out.front();
         _out.pop();
@@ -110,9 +121,10 @@ void TCPConnection::send_segment() {
             seg.header().ackno = _receiver.ackno().value();
         }
         seg.header().win = _receiver.window_size();
+        std::cout << "send segment  ";
         _segments_out.push(seg);
         if (seg.header().syn == true) {
-            std::cout << "syn ";
+            std::cout << "syn " << _out.size();
         }
         if (seg.header().ack == true) {
             std::cout << " ack" << std::endl;

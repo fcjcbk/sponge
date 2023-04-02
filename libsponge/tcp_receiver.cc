@@ -1,6 +1,7 @@
 #include "tcp_receiver.hh"
 #include "wrapping_integers.hh"
 #include <cstdint>
+#include <iostream>
 
 // Dummy implementation of a TCP receiver
 
@@ -28,7 +29,8 @@ void TCPReceiver::segment_received(const TCPSegment &seg) {
     }
     // 计算absolute seqno
     uint64_t absolute_seqno = unwrap(seg.header().seqno, isn, _reassembler.get_current_index());
-
+    std::cout << "absolute_seqno: " << absolute_seqno << std::endl;
+    std::cout << "curent_index: " << _reassembler.get_current_index() << std::endl;
     if (seg.header().fin == true) {
         if (is_end == false) {
             is_end = true;
@@ -70,6 +72,10 @@ optional<WrappingInt32> TCPReceiver::ackno() const {
 size_t TCPReceiver::window_size() const { return _capacity - _reassembler.stream_out().buffer_size(); }
 
 void TCPReceiver::write_to_assembler(const std::string& data, uint64_t index) {
+    std::cout << "window size: " << window_size() << std::endl;
+    if (index >= _reassembler.get_current_index() + window_size()) {
+        return;
+    }
     if (is_end) {
         if (index + data.size() < end_index) {
                 _reassembler.push_substring(data, index, is_end);
@@ -78,6 +84,7 @@ void TCPReceiver::write_to_assembler(const std::string& data, uint64_t index) {
             _reassembler.push_substring(data.substr(0, write_size), index, is_end);
         }
     } else {
+        std::cout << "data: " << data << " index: " << index << std::endl;
         _reassembler.push_substring(data, index, is_end);
     }
     

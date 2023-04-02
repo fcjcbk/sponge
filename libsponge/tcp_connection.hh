@@ -29,6 +29,8 @@ class TCPConnection {
     uint64_t _last_segment_received = 0;
 
     bool _end_count_time = false;
+
+    bool _is_tcp_start = false;
   public:
     //! \name "Input" interface for the writer
     //!@{
@@ -94,6 +96,8 @@ class TCPConnection {
     void send_RST_segment();
 
     void send_segment();
+
+    void set_error();
 
     //! \name construction and destruction
     //! moving is allowed; copying is disallowed; default construction not possible

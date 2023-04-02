@@ -23,38 +23,46 @@ size_t TCPConnection::unassembled_bytes() const { return _receiver.unassembled_b
 size_t TCPConnection::time_since_last_segment_received() const { return _time - _last_segment_received; }
 
 void TCPConnection::segment_received(const TCPSegment &seg) { 
+    // active为false直接退出
     if (active() == false) {
         return;
     }
-    std::cout << "received" << std::endl;
+    // rst的优先级比是否接收syn高
+    if (seg.header().rst) {
+        set_error();
+        return;
+    }
+    // 只有接收到syn才表示开始
+    if (seg.header().syn) {
+        _is_tcp_start = true;
+    }
+    if (!_is_tcp_start) {
+        return;
+    }
     bool f = false;
     // 更新最后接收报文时间
     _last_segment_received = _time;
-    if (seg.header().rst) {
-        _sender.stream_in().set_error();
-        _receiver.stream_out().set_error();
-        _is_active = false;
-        return;
-    }
+    
+    // 收到ack，传递给sender
     if (seg.header().ack) {
         _sender.ack_received(seg.header().ackno, seg.header().win);
     }
     _receiver.segment_received(seg);
+
+    // 处理keep_alive报文
     if (_receiver.ackno().has_value()
         && (seg.length_in_sequence_space() == 0)
         && seg.header().seqno == _receiver.ackno().value() - 1) {
         _sender.send_empty_segment();
         f = true;
     }
-    // todo: 如果占用sequence number发送一个segment回应
+    // 如果占用sequence number发送一个segment回应
     if (seg.length_in_sequence_space() != 0) {
-        std::cout << "true" << std::endl;
         f = true;
     }
     if (f) {
         _sender.fill_window();
         if (_sender.segments_out().empty()) {
-            std::cout << "generate a empty segmet" <<std::endl;
             _sender.send_empty_segment();
         }
         send_segment();
@@ -65,8 +73,10 @@ void TCPConnection::segment_received(const TCPSegment &seg) {
     }
     if (_receiver.stream_out().eof() && _sender.bytes_in_flight() == 0 && _sender.stream_in().eof()) {
         if (_linger_after_streams_finish == false) {
+            // active close
             _is_active = false;
         } else {
+            // passive close
             _end_count_time = true;
         }
     }
@@ -91,24 +101,26 @@ void TCPConnection::tick(const size_t ms_since_last_tick) {
     }
     _time += ms_since_last_tick; 
     _sender.tick(ms_since_last_tick);
-    // 可能存在超时重传
-    send_segment();
     if (_sender.consecutive_retransmissions() > TCPConfig::MAX_RETX_ATTEMPTS) {
         send_RST_segment();
+        return;
     }
+    // 可能存在超时重传，只有当有包才发，send_segment可能会调用fill_window，导致syn被发送
+    if (!_sender.segments_out().empty()) {
+        send_segment();
+    }
+    
     if (_end_count_time && time_since_last_segment_received() >= 10 * _cfg.rt_timeout) {
         _is_active = false;
     }
 }
 
 void TCPConnection::end_input_stream() {
-    // if (active() == false) {
-    //     return;
-    // }
+    if (active() == false) {
+        return;
+    }
     // 发送fin 
-    std::cout << "end_input_stream is_eof: " << _sender.stream_in().eof() << std::endl;
     _sender.stream_in().end_input();
-    std::cout << "end_input_stream is_eof: " << _sender.stream_in().eof() << std::endl;
     send_segment();
 }
 
@@ -138,14 +150,18 @@ void TCPConnection::send_RST_segment() {
     _sender.segments_out().pop();
     seg.header().rst = true;
     _segments_out.push(seg);
+    
+    set_error();
 }
 
 void TCPConnection::send_segment() {
+    if (active() == false) {
+        return;
+    }
     // todo: 在收到一个占用seqno的报文应该发送ack即使当前发送方buffer为空
     _sender.fill_window();
     auto& _out = _sender.segments_out();
     if (_out.empty()) {
-        std::cout << "empty!!!" << std::endl;
     }
     while (!_out.empty()) {
         TCPSegment seg = _out.front();
@@ -155,15 +171,13 @@ void TCPConnection::send_segment() {
             seg.header().ackno = _receiver.ackno().value();
         }
         seg.header().win = _receiver.window_size();
-        std::cout << "send segment  ";
         _segments_out.push(seg);
-        if (seg.header().syn == true) {
-            std::cout << "syn " << _out.size();
-        }
-        if (seg.header().ack == true) {
-            std::cout << " ack" << std::endl;
-        } else {
-            std::cout << std::endl;
-        }
     }
+}
+
+void TCPConnection::set_error() {
+    // 设置错误状态
+    _sender.stream_in().set_error();
+    _receiver.stream_out().set_error();
+    _is_active = false;
 }

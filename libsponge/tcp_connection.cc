@@ -23,6 +23,9 @@ size_t TCPConnection::unassembled_bytes() const { return _receiver.unassembled_b
 size_t TCPConnection::time_since_last_segment_received() const { return _time - _last_segment_received; }
 
 void TCPConnection::segment_received(const TCPSegment &seg) { 
+    if (active() == false) {
+        return;
+    }
     std::cout << "received" << std::endl;
     bool f = false;
     // 更新最后接收报文时间
@@ -49,11 +52,23 @@ void TCPConnection::segment_received(const TCPSegment &seg) {
         f = true;
     }
     if (f) {
+        _sender.fill_window();
         if (_sender.segments_out().empty()) {
             std::cout << "generate a empty segmet" <<std::endl;
             _sender.send_empty_segment();
         }
         send_segment();
+    }
+    // TCP结束部分
+    if (_receiver.stream_out().eof() && _sender.stream_in().eof() == false) {
+        _linger_after_streams_finish = false;
+    }
+    if (_receiver.stream_out().eof() && _sender.bytes_in_flight() == 0) {
+        if (_linger_after_streams_finish == false) {
+            _is_active = false;
+        } else {
+            _end_count_time = true;
+        }
     }
     
 }
@@ -61,6 +76,9 @@ void TCPConnection::segment_received(const TCPSegment &seg) {
 bool TCPConnection::active() const { return _is_active; }
 
 size_t TCPConnection::write(const string &data) {
+    if (active() == false) {
+        return 0;
+    }
     size_t _write_data_size = _sender.stream_in().write(data);
     send_segment();
     return _write_data_size;
@@ -68,20 +86,36 @@ size_t TCPConnection::write(const string &data) {
 
 //! \param[in] ms_since_last_tick number of milliseconds since the last call to this method
 void TCPConnection::tick(const size_t ms_since_last_tick) { 
+    if (active() == false) {
+        return;
+    }
     _time += ms_since_last_tick; 
     _sender.tick(ms_since_last_tick);
+    // 可能存在超时重传
+    send_segment();
     if (_sender.consecutive_retransmissions() > TCPConfig::MAX_RETX_ATTEMPTS) {
         send_RST_segment();
+    }
+    if (_end_count_time && time_since_last_segment_received() >= 10 * _cfg.rt_timeout) {
+        _is_active = false;
     }
 }
 
 void TCPConnection::end_input_stream() {
+    // if (active() == false) {
+    //     return;
+    // }
     // 发送fin 
+    std::cout << "end_input_stream is_eof: " << _sender.stream_in().eof() << std::endl;
     _sender.stream_in().end_input();
+    std::cout << "end_input_stream is_eof: " << _sender.stream_in().eof() << std::endl;
     send_segment();
 }
 
 void TCPConnection::connect() { 
+    if (active() == false) {
+        return;
+    }
     send_segment();
 }
 

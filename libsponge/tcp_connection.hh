@@ -27,6 +27,8 @@ class TCPConnection {
     uint64_t _time = 0;
   
     uint64_t _last_segment_received = 0;
+
+    bool _end_count_time = false;
   public:
     //! \name "Input" interface for the writer
     //!@{

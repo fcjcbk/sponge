@@ -63,7 +63,7 @@ void TCPConnection::segment_received(const TCPSegment &seg) {
     if (_receiver.stream_out().eof() && _sender.stream_in().eof() == false) {
         _linger_after_streams_finish = false;
     }
-    if (_receiver.stream_out().eof() && _sender.bytes_in_flight() == 0) {
+    if (_receiver.stream_out().eof() && _sender.bytes_in_flight() == 0 && _sender.stream_in().eof()) {
         if (_linger_after_streams_finish == false) {
             _is_active = false;
         } else {

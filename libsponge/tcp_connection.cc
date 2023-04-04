@@ -60,27 +60,16 @@ void TCPConnection::segment_received(const TCPSegment &seg) {
     if (seg.length_in_sequence_space() != 0) {
         f = true;
     }
-    if (f) {
-        _sender.fill_window();
-        if (_sender.segments_out().empty()) {
-            _sender.send_empty_segment();
-        }
-        send_segment();
-    }
-    // TCP结束部分
-    if (_receiver.stream_out().eof() && _sender.stream_in().eof() == false) {
-        _linger_after_streams_finish = false;
-    }
-    if (_receiver.stream_out().eof() && _sender.bytes_in_flight() == 0 && _sender.stream_in().eof()) {
-        if (_linger_after_streams_finish == false) {
-            // active close
-            _is_active = false;
-        } else {
-            // passive close
-            _end_count_time = true;
-        }
-    }
+
+    _sender.fill_window();
     
+    if (f && _sender.segments_out().empty()) {
+        _sender.send_empty_segment();
+    }
+    send_segment();
+    
+    // TCP结束部分
+    check_is_end();    
 }
 
 bool TCPConnection::active() const { return _is_active; }
@@ -90,6 +79,7 @@ size_t TCPConnection::write(const string &data) {
         return 0;
     }
     size_t _write_data_size = _sender.stream_in().write(data);
+    _sender.fill_window();
     send_segment();
     return _write_data_size;
 }
@@ -101,18 +91,23 @@ void TCPConnection::tick(const size_t ms_since_last_tick) {
     }
     _time += ms_since_last_tick; 
     _sender.tick(ms_since_last_tick);
+
+    check_is_end();
+    
+    if (_end_count_time && time_since_last_segment_received() >= 10 * _cfg.rt_timeout) {
+        _is_active = false;
+        return;
+    }
+
     if (_sender.consecutive_retransmissions() > TCPConfig::MAX_RETX_ATTEMPTS) {
         send_RST_segment();
         return;
     }
     // 可能存在超时重传，只有当有包才发，send_segment可能会调用fill_window，导致syn被发送
-    if (!_sender.segments_out().empty()) {
-        send_segment();
-    }
-    
-    if (_end_count_time && time_since_last_segment_received() >= 10 * _cfg.rt_timeout) {
-        _is_active = false;
-    }
+    // if (!_sender.segments_out().empty()) {
+    //     send_segment();
+    // }
+    send_segment();
 }
 
 void TCPConnection::end_input_stream() {
@@ -121,13 +116,17 @@ void TCPConnection::end_input_stream() {
     }
     // 发送fin 
     _sender.stream_in().end_input();
+    _sender.fill_window();
     send_segment();
+
+    check_is_end();
 }
 
 void TCPConnection::connect() { 
     if (active() == false) {
         return;
     }
+    _sender.fill_window();
     send_segment();
 }
 
@@ -170,7 +169,11 @@ void TCPConnection::send_segment() {
             seg.header().ack = true;
             seg.header().ackno = _receiver.ackno().value();
         }
-        seg.header().win = _receiver.window_size();
+        if (_receiver.window_size() > numeric_limits<uint16_t>().max()) {
+            seg.header().win = numeric_limits<uint16_t>().max();
+        } else {
+            seg.header().win = _receiver.window_size();
+        }
         _segments_out.push(seg);
     }
 }
@@ -180,4 +183,19 @@ void TCPConnection::set_error() {
     _sender.stream_in().set_error();
     _receiver.stream_out().set_error();
     _is_active = false;
+}
+
+void TCPConnection::check_is_end() {
+    if (_receiver.stream_out().eof() && _sender.stream_in().eof() == false) {
+        _linger_after_streams_finish = false;
+    }
+    if (_receiver.stream_out().eof() && _sender.bytes_in_flight() == 0 && _sender.stream_in().eof()) {
+        if (_linger_after_streams_finish == false) {
+            // active close
+            _is_active = false;
+        } else {
+            // passive close
+            _end_count_time = true;
+        }
+    }
 }

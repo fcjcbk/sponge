@@ -6,6 +6,7 @@
 #include "tcp_sender.hh"
 #include "tcp_state.hh"
 #include <cstdint>
+#include <limits>
 
 //! \brief A complete endpoint of a TCP connection
 class TCPConnection {
@@ -99,6 +100,8 @@ class TCPConnection {
 
     void set_error();
 
+    void check_is_end();
+    
     //! \name construction and destruction
     //! moving is allowed; copying is disallowed; default construction not possible
 

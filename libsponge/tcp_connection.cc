@@ -158,7 +158,7 @@ void TCPConnection::send_segment() {
         return;
     }
     // todo: 在收到一个占用seqno的报文应该发送ack即使当前发送方buffer为空
-    _sender.fill_window();
+    // _sender.fill_window();
     auto& _out = _sender.segments_out();
     if (_out.empty()) {
     }

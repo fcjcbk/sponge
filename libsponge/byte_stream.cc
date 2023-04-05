@@ -1,4 +1,6 @@
 #include "byte_stream.hh"
+#include <cstddef>
+#include <string>
 
 // Dummy implementation of a flow-controlled in-memory byte stream.
 
@@ -19,40 +21,35 @@ size_t ByteStream::write(const string &data) {
         return 0;
     }
 
-    int write_size = 0;
+    size_t write_size = std::min(remaining_capacity(), data.size());
 
-    if (data.size() + buffer_size() <= capacity) {
-        write_size = data.size();
-        buffer += data;
-    } else {
-        write_size = capacity - buffer.size();
-        buffer += data.substr(0, write_size);
-    }
-    
+    for (size_t i = 0; i < write_size; i++) {
+        buffer.push_back(data[i]);
+    }   
     total_bytes_written += write_size;
     return write_size;
 }
 
 //! \param[in] len bytes will be copied from the output side of the buffer
 string ByteStream::peek_output(const size_t len) const {
-    int peek_len = 0;
-    if (len >= buffer_size()) {
-        peek_len = buffer_size();
-    } else {
-        peek_len = 0;
+    size_t peek_len = std::min(len, buffer_size());
+    string peek_str;
+    for (size_t i = 0; i < peek_len; i++) {
+        peek_str.push_back(buffer[i]);
     }
-    return buffer.substr(0, peek_len);
+    return peek_str;
 }
 
 //! \param[in] len bytes will be removed from the output side of the buffer the total_read_size also would be added
 void ByteStream::pop_output(const size_t len) {
-    if (len >= buffer_size()) {
-        total_bytes_read +=  buffer_size();
-        buffer = "";
-    } else {
-        total_bytes_read += len;
-        buffer = buffer.substr(len);
+    if (len > buffer_size()) {
+        set_error();
+        return;
     }
+    for (size_t i = 0; i < len; i++) {
+        buffer.pop_front();
+    }
+    total_bytes_read += len;
     if (input_ended() == true && buffer_empty()) {
         is_eof = true;
     }
@@ -65,14 +62,12 @@ std::string ByteStream::read(const size_t len) {
     if (is_eof) {
         return "";
     }
-    int read_size = 0;
-    if (len >= buffer_size()) {
-        read_size = buffer_size();
-    } else {
-        read_size = len;
+    if (len > buffer_size()) {
+        set_error();
+        return "";
     }
-    string res = buffer.substr(0, read_size);
-    pop_output(read_size);
+    string res = peek_output(len);
+    pop_output(len);
     return res;
 }
 
@@ -106,3 +101,4 @@ size_t ByteStream::bytes_written() const { return total_bytes_written; }
 size_t ByteStream::bytes_read() const { return total_bytes_read; }
 
 size_t ByteStream::remaining_capacity() const { return capacity - buffer_size(); }
+

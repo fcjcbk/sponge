@@ -33,7 +33,7 @@ void StreamReassembler::push_substring(const string &data, const size_t index, c
                 break;
             }
         }
-        if (n_index < current_index || book.count(n_index)) {
+        if (n_index < current_index || _reassembler.count(n_index)) {
             continue;
         }
         size_t remain_capacity = remaining_capacity();
@@ -41,7 +41,6 @@ void StreamReassembler::push_substring(const string &data, const size_t index, c
             size_t write_size = _output.write_single(data[i]);
             if (write_size == 1) {
                 current_index++;
-                book.emplace(n_index);
                 if (check_is_end()) {
                     return;
                 }
@@ -51,8 +50,7 @@ void StreamReassembler::push_substring(const string &data, const size_t index, c
         }
 
         if (remain_capacity > 0) {
-            book.emplace(n_index);
-            qu.push({n_index, data[i]});
+            _reassembler.emplace(n_index, data[i]);
         } else {
             break;
         }
@@ -63,27 +61,25 @@ void StreamReassembler::push_substring(const string &data, const size_t index, c
 
 }
 
-size_t StreamReassembler::unassembled_bytes() const {  return qu.size(); }
+size_t StreamReassembler::unassembled_bytes() const { return _reassembler.size(); }
 
-bool StreamReassembler::empty() const { return qu.empty(); }
+bool StreamReassembler::empty() const {  return _reassembler.empty(); }
 
 void StreamReassembler::write_bytestream() {
     if (check_is_end()) {
         return;
     }
-    while (!qu.empty() && qu.top().first == current_index) {
-        auto [_, data] = qu.top();
+    while (!_reassembler.empty() && _reassembler.begin()->first == current_index) {
+        auto [_, data] = *_reassembler.begin();
         size_t write_size = _output.write_single(data);
         if (write_size == 0) {
             return;
         }
-        qu.pop();
-        book.erase(current_index);
+        _reassembler.erase(_reassembler.begin());
         current_index++;
         if (check_is_end()) {
             break;
         }
-        
     }
 }
 

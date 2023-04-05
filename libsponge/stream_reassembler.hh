@@ -10,6 +10,7 @@
 #include <queue>
 #include <vector>
 #include <unordered_set>
+#include <map>
 //! \brief A class that assembles a series of excerpts from a byte stream (possibly out of order,
 //! possibly overlapping) into an in-order byte stream.
 class StreamReassembler {
@@ -18,8 +19,7 @@ class StreamReassembler {
     using P = std::pair<uint64_t, char>;
     ByteStream _output;  //!< The reassembled in-order byte stream
     size_t _capacity;    //!< The maximum number of bytes
-    std::unordered_set<uint64_t> book{};
-    std::priority_queue<P, std::vector<P>, std::greater<>> qu{};
+    std::map<uint64_t, char> _reassembler{};
     uint64_t end_index = UINT64_MAX;
     uint64_t current_index = 0;
     bool _eof = false;
